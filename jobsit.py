@@ -4,25 +4,20 @@ import re
 import typer
 import datetime
 import csv
-from typing import Optional
+from typing import Optional,List
 
 app=typer.Typer()
+
+BASE_URL="https://api.itjobs.pt/job/list.json"
+API_KEY="0e1d382aea19663d13db0633833b9b40"
+
 header= {
-    "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Accept": "application/json",
-    "Accept-Language": "pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": "https://www.itjobs.pt/"
-    
+    "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
       
 
 
-base_url="https://www.itjobs.pt/api/offers"
-
 def export_to_csv(jobs:list, filename:str):
-    if not jobs:
-        typer.echo("Não há empregos para exportar.")
-        return
     
     fieldnames=["titulo","empresa","descricao","data_publicacao","salario","localizacao"]
  
@@ -44,38 +39,43 @@ def export_to_csv(jobs:list, filename:str):
 
     typer.echo(f"Empregos exportados para {filename}")
 
-
-
+@app.callback(invoke_without_command=True)
+def main():
+    """Permite subcomandos explícitos (ex.: python jobsit.py top 5)."""
+    pass
 
 @app.command()
-def top(n:int,export:Optional[str]=typer.Option(None,"--export","-e")):
+def top(n:int, export:Optional[str]=typer.Option(None,"--export","-e")):
 
-    try:
-        response=requests.get(f"{base_url}",params={"limit":n},headers=header)  
-        response.raise_for_status()
+    parametros={
+        "limit":n,
+        "api_key":API_KEY
+    }
+    
+    response=requests.get(BASE_URL,params=parametros,headers=header)  
+
+    if response.status_code==200:
+
+
+        jobs=response.json().get("results",[])
+        print(f"\nTop {n} empregos mais recentes:")     
+        for job in jobs:
+            print(f"{job.get('title','N/A')}")
       
-        typer.echo(f"Status Code: {response.status_code}")
-        typer.echo(f"Content-Type: {response.headers.get('Content-Type')}")
-        typer.echo(f"Primeiros 500 caracteres da resposta:")
-        typer.echo(response.text[:500])
-        typer.echo("=" * 50)
-
-
-        data=response.json()
-        jobs=data.get("results", [])
-      
-        jobs=jobs[:n]
-
-        typer.echo(f"Top {n} empregos mais recentes:")
-        typer.echo(json.dumps(jobs, indent=2, ensure_ascii=False))
-      
-        if export:
-         export_to_csv(jobs, export)
-
-
-    except requests.RequestException as e:
-        typer.echo(f"Erro ao aceder à API: {e}", err=True)
+        
+        csv_export=typer.confirm("Deseja exportar para CSV?")
+        if csv_export:
+            export_to_csv(jobs,"recent_jobs.csv")
+        
+        else:
+            typer.echo("Exportação cancelada.")
+    
+    else:
+        typer.echo(f"Erro ao obter dados da API: {response.status_code}", err=True)
         raise typer.Exit(1)
+
+
+  
 
 if __name__ == "__main__":
     app()
