@@ -3,6 +3,7 @@ import json
 import re
 import typer
 from datetime import datetime
+from dateutil import parser
 import csv
 from typing import Optional,List
 
@@ -114,7 +115,7 @@ def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(No
 
         csv_export=typer.confirm("Deseja exportar para CSV?")
         if csv_export:
-            export_to_csv(jobs,f"{empresa}_{localizacao}_full_time_jobs.csv")
+            export_to_csv(jobs,f"{empresa}_{localidade}_full_time_jobs.csv")
         else:
             typer.echo("Exportação cancelada.")     
     
@@ -125,55 +126,46 @@ def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(No
 
 
 ##### Maria
-
+   
 SKILLS = [
-    "Python",
-    "JavaScript",
-    "Java",
-    "C#",
-    "Ruby",
-    "Go",
-    "PHP",
-    "Swift",
-    "Kotlin",
-    "TypeScript"
+    "Python", "JavaScript", "Java", "C#", "Ruby",
+    "Go", "PHP", "Swift", "Kotlin", "TypeScript"
 ]
 
 @app.command()
 def skill_count(data_inicial: str, data_final: str):
     """Conta o número de ofertas de emprego que mencionam habilidades específicas dentro de um intervalo de datas."""
-    parametros = {
+    params = {
         "api_key": API_KEY,
-        "limit": 1000  # Ajuste conforme necessário
-    }
+        "limit": 1000}
+    response = requests.get(BASE_URL, params=params)
 
-    response = requests.get(BASE_URL, params=parametros, headers=header)
-    if response.status_code == 200:
-        jobs = response.json().get("results", [])
-        
-        skill_counter = {skill: 0 for skill in SKILLS}
-        
-        data_inicial_dt = datetime.strptime(data_inicial, "%Y-%m-%d")
-        data_final_dt = datetime.strptime(data_final, "%Y-%m-%d")
-        
-        for job in jobs:
-            pub_date_str = job.get("publishedAt", "")
-            if pub_date_str:
-                pub_date_dt = datetime.strptime(pub_date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-                if data_inicial_dt <= pub_date_dt <= data_final_dt:
-                    description = job.get("description", "").lower()
-                    for skill in SKILLS:
-                        if skill.lower() in description:
-                            skill_counter[skill] += 1
-        
-        typer.echo("Contagem de habilidades nas ofertas de emprego:")
-        for skill, count in skill_counter.items():
-            typer.echo(f"{skill}: {count}")
-    
-    else:
+    if response.status_code != 200:
         typer.echo(f"Erro ao obter dados da API: {response.status_code}", err=True)
         raise typer.Exit(1)
-  
+
+    jobs = response.json().get("jobs", [])
+    skill_counter = {skill: 0 for skill in SKILLS}
+
+    data_inicial_dt = datetime.strptime(data_inicial, "%Y-%m-%d")
+    data_final_dt = datetime.strptime(data_final, "%Y-%m-%d")
+
+    for job in jobs:
+        pub_date_str = job.get("published", "")
+        if pub_date_str:
+            try:
+                pub_date_dt = parser.parse(pub_date_str)
+            except:
+                continue
+
+            if data_inicial_dt <= pub_date_dt <= data_final_dt:
+                description = job.get("description", "").lower()
+                for skill in SKILLS:
+                    if skill.lower() in description:
+                        skill_counter[skill] += 1
+
+    resultado = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)
+    print(json.dumps([{skill: count} for skill, count in resultado if count > 0], indent=2, ensure_ascii=False))
 
 if __name__ == "__main__":
     app()
