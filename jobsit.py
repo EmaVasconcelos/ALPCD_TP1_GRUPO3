@@ -138,7 +138,7 @@ def skill_count(data_inicial: str, data_final: str):
     params = {
         "api_key": API_KEY,
         "limit": 1000}
-    response = requests.get(BASE_URL, params=params)
+    response = requests.get(BASE_URL, params=params, headers=header)
 
     if response.status_code != 200:
         typer.echo(f"Erro ao obter dados da API: {response.status_code}", err=True)
