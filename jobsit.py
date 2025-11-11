@@ -75,6 +75,50 @@ def top(n:int, export:Optional[str]=typer.Option(None,"--export","-e")):
         raise typer.Exit(1)
 
 
+@app.command()
+
+def search(localizacao:str,empresa:str,n:int,export:Optional[str]=typer.Option(None,"--export","-e")):
+    
+    parametros={
+        "limit":n,
+        "api_key":API_KEY,
+        "tipo":"part-time",
+        "localidade":localizacao,
+        "empresa":empresa
+    }
+
+    response=requests.get(BASE_URL,params=parametros,headers=header)
+    if response.status_code==200:
+        jobs=response.json().get("results",[])
+        
+        simple_jobs=[]
+        for job in jobs:
+            desc=job.get("description","") or job.get("body","") or ""
+            desc_clean=re.sub(r'<[^<]+?>','',desc).strip()
+            simple_jobs.append({
+                "titulo":job.get("title",""),
+                "empresa":job.get("company",{}).get("name",""),
+                "descricao":desc_clean[:400],
+                "data_publicacao":job.get("publishedAt",""),
+                "salario":job.get("wage",""),
+                "localizacao":", ".join([loc.get("name","") for loc in job.get("locations",[])]),
+            })
+            
+
+        typer.echo(json.dumps(simple_jobs,indent=2,ensure_ascii=False))
+
+        csv_export=typer.confirm("Deseja exportar para CSV?")
+        if csv_export:
+            export_to_csv(jobs,f"{empresa}_{localidade}_full_time_jobs.csv")
+        else:
+            typer.echo("Exportação cancelada.")     
+    
+    else:
+        typer.echo(f"Erro ao obter dados da API: {response.status_code}", err=True)
+        raise typer.Exit(1)
+    
+
+
   
 
 if __name__ == "__main__":
