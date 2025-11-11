@@ -39,6 +39,7 @@ def export_to_csv(jobs:list, filename:str):
 
     typer.echo(f"Empregos exportados para {filename}")
 
+
 @app.callback(invoke_without_command=True)
 def main():
     """Permite subcomandos explícitos (ex.: python jobsit.py top 5)."""
@@ -76,14 +77,13 @@ def top(n:int, export:Optional[str]=typer.Option(None,"--export","-e")):
 
 
 @app.command()
-
-def search(localizacao:str,empresa:str,n:int,export:Optional[str]=typer.Option(None,"--export","-e")):
+def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(None,"--export","-e")):
     
     parametros={
         "limit":n,
         "api_key":API_KEY,
         "tipo":"part-time",
-        "localidade":localizacao,
+        "localizacao":localidade,
         "empresa":empresa
     }
 
@@ -93,17 +93,22 @@ def search(localizacao:str,empresa:str,n:int,export:Optional[str]=typer.Option(N
         
         simple_jobs=[]
         for job in jobs:
+            locs=[loc.get("name","") for loc in job.get("locations",[])]
+            if not any(localidade.lower() in l.lower() for l in locs):
+                continue
+
+
             desc=job.get("description","") or job.get("body","") or ""
             desc_clean=re.sub(r'<[^<]+?>','',desc).strip()
-            simple_jobs.append({
+            simple_job={
                 "titulo":job.get("title",""),
                 "empresa":job.get("company",{}).get("name",""),
                 "descricao":desc_clean[:400],
                 "data_publicacao":job.get("publishedAt",""),
                 "salario":job.get("wage",""),
                 "localizacao":", ".join([loc.get("name","") for loc in job.get("locations",[])]),
-            })
-            
+            }
+            simple_jobs.append(simple_job)
 
         typer.echo(json.dumps(simple_jobs,indent=2,ensure_ascii=False))
 
