@@ -2,8 +2,6 @@ import requests
 import json
 import re
 import typer
-from datetime import datetime
-from dateutil import parser
 import csv
 from typing import Optional,List
 
@@ -125,47 +123,33 @@ def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(No
     
 
 
-##### Maria
-   
-SKILLS = [
-    "Python", "JavaScript", "Java", "C#", "Ruby",
-    "Go", "PHP", "Swift", "Kotlin", "TypeScript"
-]
+## Mafalda mete a tua parte aqui ##
+
+
+
 
 @app.command()
-def skill_count(data_inicial: str, data_final: str):
-    """Conta o número de ofertas de emprego que mencionam habilidades específicas dentro de um intervalo de datas."""
-    params = {
+def skills(skills: List[str], data_inicial: str, data_final: str):
+    """Lista os trabalhos que requerem uma determinada lista de skills num período de tempo específico e opcionalmente salva em CSV."""
+    
+    parametros = {
         "api_key": API_KEY,
-        "limit": 1000}
-    response = requests.get(BASE_URL, params=params, headers=header)
+        "skills": ",".join(skills),
+        "data_inicial": data_inicial,
+        "data_final": data_final
+    }
 
-    if response.status_code != 200:
-        typer.echo(f"Erro ao obter dados da API: {response.status_code}", err=True)
-        raise typer.Exit(1)
+    response = requests.get(BASE_URL, headers=header, params=parametros)
+    if response.status_code == 200:
+        jobs = response.json().get("results", [])
+        print(json.dumps(jobs, indent=2))
+        
+        csv_export=typer.confirm("Deseja exportar para CSV?")
+        if csv_export:
+            export_to_csv(jobs,"skill_jobs.csv")
+    else:
+        print(f"Erro: {response.status_code}")
 
-    jobs = response.json().get("jobs", [])
-    skill_counter = {skill: 0 for skill in SKILLS}
-
-    data_inicial_dt = datetime.strptime(data_inicial, "%Y-%m-%d")
-    data_final_dt = datetime.strptime(data_final, "%Y-%m-%d")
-
-    for job in jobs:
-        pub_date_str = job.get("published", "")
-        if pub_date_str:
-            try:
-                pub_date_dt = parser.parse(pub_date_str)
-            except:
-                continue
-
-            if data_inicial_dt <= pub_date_dt <= data_final_dt:
-                description = job.get("description", "").lower()
-                for skill in SKILLS:
-                    if skill.lower() in description:
-                        skill_counter[skill] += 1
-
-    resultado = sorted(skill_counter.items(), key=lambda x: x[1], reverse=True)
-    print(json.dumps([{skill: count} for skill, count in resultado if count > 0], indent=2, ensure_ascii=False))
 
 if __name__ == "__main__":
     app()
