@@ -122,8 +122,37 @@ def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(No
         raise typer.Exit(1)
     
 
+@app.command()
+def type(jobid: str):
+    """Extrai o regime de trabalho (remoto/híbrido/presencial/outro) de um anúncio específico via job ID."""
 
-## Mafalda mete a tua parte aqui ##
+    job_url = "https://api.itjobs.pt/job/get.json"
+    parametros = { "api_key": API_KEY, "job_id": jobid}
+
+    response = requests.get(job_url, headers=header, params=parametros)
+
+    if response.status_code == 200:
+        job = response.json().get("job", {})
+        descricao = job.get("description") or ""
+        corpo = job.get("body") or ""
+        texto = descricao + " " + corpo
+        texto_final = re.sub(r'<[^<]+?>', '', texto).lower().replace('\n', ' ').strip()
+
+        if re.search(r"\bremoto\b|\bteletrabalho\b", texto_final):
+            regime = "remoto"
+        elif re.search(r"\bhíbrido\b|\bhibrido\b", texto_final):
+            regime = "híbrido"
+        elif re.search(r"\bpresencial\b|\bescritório\b", texto_final):
+            regime = "presencial"
+        else:
+            regime = "outro"
+
+        typer.echo(f"Texto analisado:\n{texto_final}")
+      
+        typer.echo(f"Regime de trabalho: {regime}")#nenhum texto é disponibilizado e ele retorna como outro
+    else:
+        typer.echo(f"Erro ao obter dados do job ID {jobid}: {response.status_code}", err=True)
+        raise typer.Exit(1)
 
 
 
