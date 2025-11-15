@@ -41,7 +41,7 @@ def export_to_csv(jobs:list, filename:str):
 
 @app.callback(invoke_without_command=True)
 def main():
-    """Permite subcomandos explícitos (ex.: python jobsit.py top 5)."""
+        #Permite subcomandos explícitos (ex.: python jobsit.py top 5).
     pass
 
 @app.command()
