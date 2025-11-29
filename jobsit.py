@@ -122,39 +122,47 @@ def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(No
         raise typer.Exit(1)
     
 
+
 @app.command()
 def type(jobid: str):
-    """Extrai o regime de trabalho (remoto/híbrido/presencial/outro) de um anúncio específico via job ID."""
+    """Extrai o regime de trabalho (remoto/híbrido/presencial/outro) de um anúncio específico a partir job ID."""
+    
+    URL = "https://api.itjobs.pt/job/get.json"
+    parametros = {"api_key":API_KEY,"id":jobid}
 
-    job_url = "https://api.itjobs.pt/job/get.json"
-    parametros = { "api_key": API_KEY, "job_id": jobid}
+    response = requests.get(URL, params=parametros, headers=header)
 
-    response = requests.get(job_url, headers=header, params=parametros)
-
-    if response.status_code == 200:
-        job = response.json().get("job", {})
-        descricao = job.get("description") or ""
-        corpo = job.get("body") or ""
-        texto = descricao + " " + corpo
-        texto_final = re.sub(r'<[^<]+?>', '', texto).lower().replace('\n', ' ').strip()
-
-        if re.search(r"\bremoto\b|\bteletrabalho\b", texto_final):
-            regime = "remoto"
-        elif re.search(r"\bhíbrido\b|\bhibrido\b", texto_final):
-            regime = "híbrido"
-        elif re.search(r"\bpresencial\b|\bescritório\b", texto_final):
-            regime = "presencial"
-        else:
-            regime = "outro"
-
-        typer.echo(f"Texto analisado:\n{texto_final}")
-      
-        typer.echo(f"Regime de trabalho: {regime}")#nenhum texto é disponibilizado e ele retorna como outro
-    else:
+    if response.status_code != 200:
         typer.echo(f"Erro ao obter dados do job ID {jobid}: {response.status_code}", err=True)
         raise typer.Exit(1)
 
+    job = response.json()
 
+    if not job or ("title" not in job and "description" not in job and "body" not in job):
+        typer.echo(f"Erro: job ID {jobid} inválido ou não encontrado.", err=True)
+        raise typer.Exit(1)
+
+    descricao = job.get("description","") or ""
+    corpo = job.get("body","") or ""
+    titulo=job.get("title","") or ""
+    texto = f"{titulo} {descricao} {corpo}"
+    texto_final = re.sub(r'<[^<]+?>', '', texto).lower().replace('\n', ' ').strip()
+
+    remoto = re.search(r"(remoto|remote|teletrabalho|home office)", texto_final)
+    presencial = re.search(r"(presencial|escritório|office)", texto_final)
+    hibrido = re.search(r"(híbrido|hybrid)", texto_final)
+    
+    if (remoto and presencial) or hibrido:
+        regime = "híbrido"
+    elif remoto:
+        regime = "remoto"
+    elif presencial:
+        regime = "presencial"
+    else:
+        regime = "outro"
+
+    typer.echo(f"Regime de trabalho: {regime}")
+   
 
 
 @app.command()
@@ -182,4 +190,3 @@ def skills(skills: List[str], data_inicial: str, data_final: str):
 
 if __name__ == "__main__":
     app()
-
