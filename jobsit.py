@@ -188,5 +188,59 @@ def skills(skills: List[str], data_inicial: str, data_final: str):
         print(f"Erro: {response.status_code}")
 
 
+
+
+
+#parte da mafalda
+
+
+
+@app.command()
+def statistics(export:Optional[str]=typer.Option(None,"--export","-e")):
+    
+    parametros={
+        "limit":200,
+        "api_key":API_KEY
+    }
+
+    response=requests.get(BASE_URL,params=parametros,headers=header)
+
+    if response.status_code!=200:
+        typer.echo("Erro ao obter os dados da API.")
+        raise typer.Exit(1)
+    
+    jobs=response.json().get("results",[])
+    estatisticas={}
+
+    for job in jobs:
+        titulo=job.get("title","")
+        zonas=[loc.get("name","") for loc in job.get("locations",[])]
+
+        for zona in zonas:
+            chave=(zona,titulo)
+            estatisticas[chave]=estatisticas.get(chave,0)+1
+
+    typer.echo("Estatisticas de empregos por zona e tipo:")
+    for (zona,titulo),contagem in estatisticas.items():
+        typer.echo(f"{zona:<20} - {titulo:<40}: {contagem} empregos")
+
+
+    csv_export=typer.confirm("Deseja exportar as estatísticas para CSV?")
+
+    if csv_export:
+        filename="estatisticas_empregos.csv"
+        with open(filename,mode='w',newline='',encoding='utf-8') as csvfile:
+            writer=csv.writer(csvfile)
+            writer.writerow(["zona","tipo de emprego","contagem"])
+            for (zona,titulo),contagem in estatisticas.items():
+                writer.writerow([zona,titulo,contagem])
+
+        typer.echo(f"Estatísticas exportadas para {filename}")
+    
+    else:
+        typer.echo("Nao foi exportado nenhum csv.")
+
+
+
 if __name__ == "__main__":
     app()
