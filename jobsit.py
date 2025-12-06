@@ -4,6 +4,8 @@ import re
 import typer
 import csv
 from typing import Optional,List
+from collections import Counter
+from bs4 import BeautifulSoup
 
 app=typer.Typer()
 
@@ -240,6 +242,43 @@ def statistics(export:Optional[str]=typer.Option(None,"--export","-e")):
     else:
         typer.echo("Nao foi exportado nenhum csv.")
 
+
+BASE_URL_TEAMLYZER = "https://pt.teamlyzer.com/companies/jobs"
+
+@app.command()
+def list_skills(job: str):
+
+    """Lista as top 10 skills pedidas no website Teamlyzer para um determinado trabalho."""
+
+    url = f"https://pt.teamlyzer.com/companies/jobs?tags=python&order=most_relevant"
+
+    response = requests.get(url, headers=header)
+    if response.status_code != 200:
+        print(f"Erro: {response.status_code}")
+        raise typer.Exit()
+
+    # Parse HTML
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    all_skills = []
+
+    # No Teamlyzer, cada skill aparece como <span class="tag"> ou <a class="tag">
+    for tag in soup.find_all(["span", "a"], class_="tag"):
+        skill = tag.get_text(strip=True)
+        if skill:
+            all_skills.append(skill.lower())
+
+    if not all_skills:
+        print("Nenhuma skill encontrada para este trabalho.")
+        raise typer.Exit()
+
+    # Contar ocorrências
+    counter = Counter(all_skills)
+    top10 = counter.most_common(10)
+
+    resultado = [{"skill": skill, "count": count} for skill, count in top10]
+
+    print(json.dumps(resultado, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
