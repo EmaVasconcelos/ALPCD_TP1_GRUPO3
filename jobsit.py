@@ -252,9 +252,11 @@ def list_skills(job: str):
 
     url = f"https://pt.teamlyzer.com/companies/jobs?tags=python&order=most_relevant"
 
-    response = requests.get(url, headers=header)
-    if response.status_code != 200:
-        print(f"Erro: {response.status_code}")
+    try:
+        response = requests.get(url, headers=header)
+        response.raise_for_status()
+    except requests.RequestException as e: 
+        typer.echo(f"Erro ao obter dados do Teamlyzer: {e}", err=True)
         raise typer.Exit()
 
     # Parse HTML
@@ -262,14 +264,14 @@ def list_skills(job: str):
 
     all_skills = []
 
-    # No Teamlyzer, cada skill aparece como <span class="tag"> ou <a class="tag">
-    for tag in soup.find_all(["span", "a"], class_="tag"):
-        skill = tag.get_text(strip=True)
+    tag_links = soup.select("div.tags a[href*='/companies/?tags=']")
+    for link in tag_links:
+        skill = link.get_text(strip=True).lower()
         if skill:
-            all_skills.append(skill.lower())
+            all_skills.append(skill)
 
     if not all_skills:
-        print("Nenhuma skill encontrada para este trabalho.")
+        typer.echo("Nenhuma skill encontrada para este trabalho.")
         raise typer.Exit()
 
     # Contar ocorrências
