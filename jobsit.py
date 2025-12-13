@@ -282,6 +282,18 @@ def list_skills(job: str):
 
     print(json.dumps(resultado, indent=2, ensure_ascii=False))
 
+    exportar_csv = typer.confirm("Deseja exportar o resultado para CSV?")
+
+    if exportar_csv:
+        filename = f"top10_skills_{job}.csv"
+        with open(filename, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["skill", "count"])
+            writer.writeheader()
+            writer.writerows(resultado)
+
+        typer.echo(f"CSV exportado com sucesso: {filename}")
+    else:
+        typer.echo("Exportação cancelada.")
 
 if __name__ == "__main__":
     app()
