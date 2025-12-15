@@ -292,8 +292,7 @@ def get(jobid: str, export: bool = typer.Option(False, "--export", "-e")):
     }
     
     print(json.dumps(resultado, indent=2, ensure_ascii=False))
-    print(f"DEBUG TOTAL: jobid='{jobid}' | export={export}")
-
+    
     exportar_csv = typer.confirm("Deseja exportar o resultado para CSV?")
 
     if exportar_csv:
