@@ -171,12 +171,7 @@ def type(jobid: str):
 def skills(skills: List[str], data_inicial: str, data_final: str):
     """Lista os trabalhos que requerem uma determinada lista de skills num período de tempo específico e opcionalmente salva em CSV."""
     
-    parametros = {
-        "api_key": API_KEY,
-        "skills": ",".join(skills),
-        "data_inicial": data_inicial,
-        "data_final": data_final
-    }
+    parametros = {"api_key": API_KEY,"skills": ",".join(skills)}
 
     response = requests.get(BASE_URL, headers=header, params=parametros)
     if response.status_code == 200:
@@ -212,54 +207,109 @@ def get(jobid: str, export: bool = typer.Option(False, "--export", "-e")):
     nome_empresa = company.lower().replace(" ", "-")
     company_url = f"https://pt.teamlyzer.com/companies/{nome_empresa}"
 
+    teamlyzer_rating = None
+    teamlyzer_description = None
+    teamlyzer_salary = None 
+    teamlyzer_benefits = None
+    
     try:
-        page = requests.get(company_url, headers=TEAMLYZER_HEADER)
-        page.raise_for_status()
+        response_teamlyzer= requests.get(company_url, headers=TEAMLYZER_HEADER)
+        response_teamlyzer.raise_for_status()
+
+        soup = BeautifulSoup(response_teamlyzer.text, "html.parser")
+    
+        rating = ((soup.find("span", class_="text-center c_rating")) or (soup.find("span", class_="text-center aa_rating"))) 
+
+        if rating:
+            teamlyzer_rating = rating.get_text(strip=True)
+
+        description = soup.find("div", class_="ellipsis center_mobile")
+        if description:
+            teamlyzer_description = description.get_text(strip=True)
+
+        reviews = soup.find("div", class_="col-lg-12 box_background_style_overall voffset2")
+        if reviews:
+            salary_icone= reviews.find("i", class_="fa fa-eur")
+            if salary_icone:
+                box= salary_icone.find_parent("div", class_="panel mini-box")
+                if box:
+                    salary_box = box.find("div", class_="box-info")
+                    if salary_box:
+                        salary = salary_box.find("p", class_="size-h2")
+                        if salary:
+                            teamlyzer_salary = " ".join(salary.get_text(strip=True).split()[:3])     
+    
     except requests.RequestException:
         typer.echo("Erro ao aceder ao Teamlyzer.", err=True)
         raise typer.Exit(1)
-    else:
-        soup = BeautifulSoup(page.text, "html.parser")
 
-        rating = soup.find("span", class_="aa_rating")
-        if rating:
-            teamlyzer_rating = rating.get_text(strip=True)
+    benefits_url= f"https://pt.teamlyzer.com/companies/{nome_empresa}/benefits-and-values"
+    try:
+        response_benefits= requests.get(benefits_url, headers=TEAMLYZER_HEADER)
+        response_benefits.raise_for_status()
+    
+        soup_benefits = BeautifulSoup(response_benefits.text, "html.parser")
+        
+        teamlyzer_benefits = {}
+        area=None
+        
+        benefits_blocks = soup_benefits.find_all("div", class_="col-lg-12 voffset3 divider_benefits")
+        if not benefits_blocks:
+            typer.echo("Empresa sem página de benefícios no Teamlyzer.")
+            teamlyzer_benefits = None
         else:
-            teamlyzer_rating = None
+            for block in benefits_blocks:
+                block_area=block.find("h3")
+                if block_area and block_area.find("b"):
+                    area = block_area.find("b").get_text(strip=True)
+                    teamlyzer_benefits[area] = []
+                
+                benefits = block.find_all("div", class_="flex_details")
+                for benefit in benefits:
+                    benefits_text=benefit.get_text(strip=True)
+                    if benefits_text and area:
+                        teamlyzer_benefits[area].append(benefits_text)
 
-        desc_div = soup.find("div", class_="ellipsis center_mobile")
-        if desc_div:
-            teamlyzer_description = desc_div.get_text(strip=True)
-        else:
-            teamlyzer_description = None
+        benefits_lines = []
+        for tema, beneficios in teamlyzer_benefits.items():
+            if beneficios:
+                beneficios_str = ", ".join(beneficios)
+                benefits_lines.append(f"{tema}:{beneficios_str}")
+        teamlyzer_benefits= " | ".join(benefits_lines) 
 
-        #falta benefits e salary
+    except requests.RequestException:
+        typer.echo(f"Erro ao aceder à página de benefícios do Teamlyzer.", err=True)
+        teamlyzer_benefits = None
 
     resultado = {
-        "id": job.get("id"),
-        "title": job.get("title"),
-        "company": company,
+        "job_id": jobid,
+        "job_title": job.get("title", ""),
+        "company_name": company,
         "teamlyzer_rating": teamlyzer_rating,
         "teamlyzer_description": teamlyzer_description,
-        #"teamlyzer_benefits": teamlyzer_benefits,
-        #"teamlyzer_salary": teamlyzer_salary,
+        "teamlyzer_benefits": teamlyzer_benefits,
+        "teamlyzer_salary": teamlyzer_salary
     }
-
+    
     print(json.dumps(resultado, indent=2, ensure_ascii=False))
+    print(f"DEBUG TOTAL: jobid='{jobid}' | export={export}")
 
-    if export:
+    exportar_csv = typer.confirm("Deseja exportar o resultado para CSV?")
+
+    if exportar_csv:
         filename = f"job_teamlyzer_{jobid}.csv"
         with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(resultado.keys())
-            writer.writerow(resultado.values())
-        typer.echo("CSV exportado com sucesso: {filename}")
+            writer.writerow(["job_id", "job_title", "company_name", "teamlyzer_rating", "teamlyzer_description", "teamlyzer_salary", "teamlyzer_benefits"])
+            writer.writerow([
+                jobid, job["title"], company, 
+                teamlyzer_rating or "", teamlyzer_description or "", 
+                teamlyzer_salary or "", teamlyzer_benefits or ""
+            ])
+        typer.echo(f"CSV exportado com sucesso: {filename}") 
     else:
         typer.echo("Exportação não foi concluída")
-
-
-
-
+   
 @app.command()
 def statistics(export:Optional[str]=typer.Option(None,"--export","-e")):
     
