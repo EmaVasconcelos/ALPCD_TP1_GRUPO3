@@ -124,18 +124,18 @@ def search(localidade:str,empresa:str,n:int,export:Optional[str]=typer.Option(No
         raise typer.Exit(1)
     
 
+URL = "https://api.itjobs.pt/job/get.json"
 
 @app.command()
 def type(jobid: str):
     """Extrai o regime de trabalho (remoto/híbrido/presencial/outro) de um anúncio específico a partir job ID."""
     
-    URL = "https://api.itjobs.pt/job/get.json"
     parametros = {"api_key":API_KEY,"id":jobid}
 
     response = requests.get(URL, params=parametros, headers=header)
 
     if response.status_code != 200:
-        typer.echo(f"Erro ao obter dados do job ID {jobid}: {response.status_code}", err=True)
+        typer.echo(f"Erro ao obter dados do job ID {jobid}: {response.status_code}")
         raise typer.Exit(1)
 
     job = response.json()
@@ -190,10 +190,73 @@ def skills(skills: List[str], data_inicial: str, data_final: str):
         print(f"Erro: {response.status_code}")
 
 
+TEAMLYZER_HEADER = {"User-Agent": "Mozilla/5.0 (compatible; TeamlyzerScraper/1.0)"}
 
+@app.command()
+def get(jobid: str, export: bool = typer.Option(False, "--export", "-e")):
+    """obter informações sobre um jobID e adicionar informações acerca da empresa."""
+  
+    params = {"api_key": API_KEY, "id": jobid}
+    response = requests.get(URL, params=params, headers=header)
 
+    if response.status_code != 200:
+        typer.echo(f"Erro ao obter dados do job ID {jobid}: {response.status_code}")
+        raise typer.Exit(1)
 
-#parte da mafalda
+    job = response.json()
+    company = job.get("company", {}).get("name", "").strip()
+    if not company:
+        typer.echo("Não existe nenhuma empresa relacionada a este anúncio.")
+        raise typer.Exit(1)
+
+    nome_empresa = company.lower().replace(" ", "-")
+    company_url = f"https://pt.teamlyzer.com/companies/{nome_empresa}"
+
+    try:
+        page = requests.get(company_url, headers=TEAMLYZER_HEADER)
+        page.raise_for_status()
+    except requests.RequestException:
+        typer.echo("Erro ao aceder ao Teamlyzer.", err=True)
+        raise typer.Exit(1)
+    else:
+        soup = BeautifulSoup(page.text, "html.parser")
+
+        rating = soup.find("span", class_="aa_rating")
+        if rating:
+            teamlyzer_rating = rating.get_text(strip=True)
+        else:
+            teamlyzer_rating = None
+
+        desc_div = soup.find("div", class_="ellipsis center_mobile")
+        if desc_div:
+            teamlyzer_description = desc_div.get_text(strip=True)
+        else:
+            teamlyzer_description = None
+
+        #falta benefits e salary
+
+    resultado = {
+        "id": job.get("id"),
+        "title": job.get("title"),
+        "company": company,
+        "teamlyzer_rating": teamlyzer_rating,
+        "teamlyzer_description": teamlyzer_description,
+        #"teamlyzer_benefits": teamlyzer_benefits,
+        #"teamlyzer_salary": teamlyzer_salary,
+    }
+
+    print(json.dumps(resultado, indent=2, ensure_ascii=False))
+
+    if export:
+        filename = f"job_teamlyzer_{jobid}.csv"
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(resultado.keys())
+            writer.writerow(resultado.values())
+        typer.echo("CSV exportado com sucesso: {filename}")
+    else:
+        typer.echo("Exportação não foi concluída")
+
 
 
 
